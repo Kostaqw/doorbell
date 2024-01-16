@@ -1,71 +1,66 @@
-#include <QFile>
-#include <QDomDocument>
-#include <QDomElement>
-#include <QMap>
-#include <QByteArray>
-#include <QDebug>
+#include <stdio.h>
 
-// Функция, которая создает словарь из XML
-QMap<QString, QByteArray> createXmlDictionary(const QDomDocument& doc) {
-    QMap<QString, QByteArray> xmlDictionary;
+#define SECONDS_IN_MINUTE 60
+#define SECONDS_IN_HOUR   3600
+#define SECONDS_IN_DAY    86400
+#define SECONDS_IN_YEAR   31536000
 
-    // Рекурсивная функция для прохода по узлам XML
-    std::function<void(const QDomNode&, const QString&)> traverseXml = [&](const QDomNode& node, const QString& path) {
-        if (node.isElement()) {
-            QDomElement element = node.toElement();
-            QString currentPath = path.isEmpty() ? element.tagName() : path + "." + element.tagName();
+// Функция для вычисления даты и времени из количества секунд.
+void convertSecondsToDateTime(uint32_t seconds, int *year, int *month, int *day, int *hour, int *minute, int *second) {
+    *year = 1970; // Начальный год для UNIX-эпохи.
 
-            // Добавляем значение в словарь
-            xmlDictionary[currentPath] = element.text().toUtf8();
+    // Рассчитываем год.
+    while (seconds >= SECONDS_IN_YEAR) {
+        (*year)++;
+        seconds -= SECONDS_IN_YEAR;
+    }
 
-            // Рекурсивно обрабатываем дочерние элементы
-            QDomNodeList children = element.childNodes();
-            for (int i = 0; i < children.size(); ++i) {
-                traverseXml(children.at(i), currentPath);
-            }
+    // Рассчитываем месяц и день.
+    int daysInMonth;
+    for (*month = 1; *month <= 12; (*month)++) {
+        switch (*month) {
+            case 1: case 3: case 5: case 7: case 8: case 10: case 12:
+                daysInMonth = 31;
+                break;
+            case 4: case 6: case 9: case 11:
+                daysInMonth = 30;
+                break;
+            case 2:
+                // Проверка на високосный год.
+                daysInMonth = ((*year % 4 == 0 && *year % 100 != 0) || (*year % 400 == 0)) ? 29 : 28;
+                break;
+            default:
+                daysInMonth = 0; // Некорректный месяц.
         }
-    };
 
-    // Начинаем обработку с корня документа
-    traverseXml(doc.firstChild(), "");
+        if (seconds < daysInMonth * SECONDS_IN_DAY)
+            break;
 
-    return xmlDictionary;
+        seconds -= daysInMonth * SECONDS_IN_DAY;
+    }
+
+    // Рассчитываем день.
+    *day = seconds / SECONDS_IN_DAY + 1;
+    seconds %= SECONDS_IN_DAY;
+
+    // Рассчитываем часы, минуты и секунды.
+    *hour = seconds / SECONDS_IN_HOUR;
+    seconds %= SECONDS_IN_HOUR;
+    *minute = seconds / SECONDS_IN_MINUTE;
+    *second = seconds % SECONDS_IN_MINUTE;
 }
 
 int main() {
-    QDomDocument originalDoc;
-    QDomDocument sizeDoc;
+    uint32_t ntpTime = /* полученные с сервера секунды */;
 
-    // Загружаем XML из файлов
-    QFile originalFile("original.xml");
-    QFile sizeFile("size.xml");
+    // Переменные для хранения результата преобразования.
+    int year, month, day, hour, minute, second;
 
-    if (originalFile.open(QIODevice::ReadOnly | QIODevice::Text) && sizeFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        if (originalDoc.setContent(&originalFile) && sizeDoc.setContent(&sizeFile)) {
-            originalFile.close();
-            sizeFile.close();
+    // Вызываем функцию преобразования времени.
+    convertSecondsToDateTime(ntpTime, &year, &month, &day, &hour, &minute, &second);
 
-            // Создаем словари для обоих XML-документов
-            QMap<QString, QByteArray> originalDictionary = createXmlDictionary(originalDoc);
-            QMap<QString, QByteArray> sizeDictionary = createXmlDictionary(sizeDoc);
-
-            // Пример использования словарей
-            for (auto it = originalDictionary.begin(); it != originalDictionary.end(); ++it) {
-                const QString& path = it.key();
-                const QByteArray& value = it.value();
-
-                // Если второй словарь содержит размер для данного пути
-                if (sizeDictionary.contains(path)) {
-                    int size = sizeDictionary[path].toInt();
-                    qDebug() << "Path:" << path << ", Value:" << value << ", Size:" << size;
-                }
-            }
-        } else {
-            qDebug() << "Failed to set content for one or both XML documents";
-        }
-    } else {
-        qDebug() << "Failed to open one or both XML files";
-    }
+    // Выводим результат.
+    printf("Year: %d, Month: %d, Day: %d, Hour: %d, Minute: %d, Second: %d\n", year, month, day, hour, minute, second);
 
     return 0;
 }
