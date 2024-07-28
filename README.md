@@ -1,66 +1,75 @@
-#include <stdio.h>
+В Qt 5.8, QML не поддерживает прямой доступ к данным модели через get(row) в стиле JavaScript-объектов, как показано в вашем вопросе. Вместо этого, вы должны использовать ListView (или TableView, если работаете с QtQuick.Controls 2) и делегаты для работы с элементами модели.
 
-#define SECONDS_IN_MINUTE 60
-#define SECONDS_IN_HOUR   3600
-#define SECONDS_IN_DAY    86400
-#define SECONDS_IN_YEAR   31536000
+Для получения данных из выделенной строки в Qt 5.8 вы можете использовать currentIndex из TableView и функции data или modelData в QML, чтобы получить доступ к данным в модели.
 
-// Функция для вычисления даты и времени из количества секунд.
-void convertSecondsToDateTime(uint32_t seconds, int *year, int *month, int *day, int *hour, int *minute, int *second) {
-    *year = 1970; // Начальный год для UNIX-эпохи.
+Вот обновленный пример, подходящий для Qt 5.8:
 
-    // Рассчитываем год.
-    while (seconds >= SECONDS_IN_YEAR) {
-        (*year)++;
-        seconds -= SECONDS_IN_YEAR;
-    }
+qml
+Копировать код
+import QtQuick 2.15
+import QtQuick.Controls 2.0
 
-    // Рассчитываем месяц и день.
-    int daysInMonth;
-    for (*month = 1; *month <= 12; (*month)++) {
-        switch (*month) {
-            case 1: case 3: case 5: case 7: case 8: case 10: case 12:
-                daysInMonth = 31;
-                break;
-            case 4: case 6: case 9: case 11:
-                daysInMonth = 30;
-                break;
-            case 2:
-                // Проверка на високосный год.
-                daysInMonth = ((*year % 4 == 0 && *year % 100 != 0) || (*year % 400 == 0)) ? 29 : 28;
-                break;
-            default:
-                daysInMonth = 0; // Некорректный месяц.
+ApplicationWindow {
+    visible: true
+    width: 640
+    height: 480
+
+    TableView {
+        id: tableView
+        anchors.fill: parent
+        model: myModel
+        selectionBehavior: TableView.SelectRows
+        selectionMode: TableView.SingleSelection
+
+        TableViewColumn {
+            role: "name"
+            title: "Name"
+            width: 200
         }
 
-        if (seconds < daysInMonth * SECONDS_IN_DAY)
-            break;
-
-        seconds -= daysInMonth * SECONDS_IN_DAY;
+        onCurrentRowChanged: {
+            if (currentRow >= 0) {
+                var index = tableView.selectionModel.currentIndex
+                var name = myModel.data(index, MyModel.NameRole)
+                var detail = myModel.data(index, MyModel.DetailRole)
+                dialog.text = "Name: " + name + "\nDetail: " + detail
+            } else {
+                dialog.text = "No item selected!"
+            }
+        }
     }
 
-    // Рассчитываем день.
-    *day = seconds / SECONDS_IN_DAY + 1;
-    seconds %= SECONDS_IN_DAY;
+    Button {
+        text: "Show Details"
+        onClicked: dialog.open
+    }
 
-    // Рассчитываем часы, минуты и секунды.
-    *hour = seconds / SECONDS_IN_HOUR;
-    seconds %= SECONDS_IN_HOUR;
-    *minute = seconds / SECONDS_IN_MINUTE;
-    *second = seconds % SECONDS_IN_MINUTE;
+    MessageDialog {
+        id: dialog
+        title: "Item Details"
+        text: "Details will be shown here"
+    }
 }
+Пояснения:
+TableView:
 
-int main() {
-    uint32_t ntpTime = /* полученные с сервера секунды */;
+selectionBehavior и selectionMode настроены на выбор строки и одновременное выделение одной строки соответственно.
+onCurrentRowChanged — это сигнал, который вызывается при изменении текущей строки. Внутри него можно получить текущий индекс строки и использовать метод data для доступа к данным модели.
+Получение данных из модели:
 
-    // Переменные для хранения результата преобразования.
-    int year, month, day, hour, minute, second;
+myModel.data(index, MyModel.NameRole): Получает данные из модели, используя индекс и роль. Вы должны убедиться, что роль зарегистрирована в модели (например, NameRole и DetailRole).
+MessageDialog:
 
-    // Вызываем функцию преобразования времени.
-    convertSecondsToDateTime(ntpTime, &year, &month, &day, &hour, &minute, &second);
+Этот элемент отображает подробную информацию, извлеченную из модели. Открывается при нажатии кнопки "Show Details".
+Регистрация ролей в модели
+Убедитесь, что роли зарегистрированы в модели и доступны для использования в QML. Пример регистрации ролей:
 
-    // Выводим результат.
-    printf("Year: %d, Month: %d, Day: %d, Hour: %d, Minute: %d, Second: %d\n", year, month, day, hour, minute, second);
-
-    return 0;
+cpp
+Копировать код
+QHash<int, QByteArray> MyModel::roleNames() const {
+    QHash<int, QByteArray> roles;
+    roles[NameRole] = "name";
+    roles[DetailRole] = "detail";
+    return roles;
 }
+В QML, MyModel.NameRole и MyModel.DetailRole соответствуют NameRole и DetailRole из модели, используемой для доступа к данным.
