@@ -1,75 +1,106 @@
-В Qt 5.8, QML не поддерживает прямой доступ к данным модели через get(row) в стиле JavaScript-объектов, как показано в вашем вопросе. Вместо этого, вы должны использовать ListView (или TableView, если работаете с QtQuick.Controls 2) и делегаты для работы с элементами модели.
+#include <QFile>
+#include <QByteArray>
+#include <QDataStream>
+#include <QDebug>
+#include <QDir>
 
-Для получения данных из выделенной строки в Qt 5.8 вы можете использовать currentIndex из TableView и функции data или modelData в QML, чтобы получить доступ к данным в модели.
+class RomEmulator {
+public:
+    RomEmulator(const QString& filePath, quint32 sectors, quint32 sectorSize);
+    bool writeArray(quint32 address, const QByteArray& array, quint32 size);
+    QByteArray readArray(quint32 address, quint32 size);
+    void clearSector(quint8 sectorNumber);
 
-Вот обновленный пример, подходящий для Qt 5.8:
+private:
+    QString m_filePath;
+    quint32 m_sectors;
+    quint32 m_sectorSize;
+    QFile m_file;
 
-qml
-Копировать код
-import QtQuick 2.15
-import QtQuick.Controls 2.0
+    void initializeFile();
+    bool addressInRange(quint32 address, quint32 size) const;
+};
 
-ApplicationWindow {
-    visible: true
-    width: 640
-    height: 480
+RomEmulator::RomEmulator(const QString& filePath, quint32 sectors, quint32 sectorSize)
+    : m_filePath(filePath), m_sectors(sectors), m_sectorSize(sectorSize), m_file(filePath) {
+    initializeFile();
+}
 
-    TableView {
-        id: tableView
-        anchors.fill: parent
-        model: myModel
-        selectionBehavior: TableView.SelectRows
-        selectionMode: TableView.SingleSelection
-
-        TableViewColumn {
-            role: "name"
-            title: "Name"
-            width: 200
+void RomEmulator::initializeFile() {
+    if (!QFile::exists(m_filePath)) {
+        if (!m_file.open(QIODevice::WriteOnly)) {
+            qCritical() << "Cannot create file:" << m_filePath;
+            return;
         }
-
-        onCurrentRowChanged: {
-            if (currentRow >= 0) {
-                var index = tableView.selectionModel.currentIndex
-                var name = myModel.data(index, MyModel.NameRole)
-                var detail = myModel.data(index, MyModel.DetailRole)
-                dialog.text = "Name: " + name + "\nDetail: " + detail
-            } else {
-                dialog.text = "No item selected!"
-            }
-        }
-    }
-
-    Button {
-        text: "Show Details"
-        onClicked: dialog.open
-    }
-
-    MessageDialog {
-        id: dialog
-        title: "Item Details"
-        text: "Details will be shown here"
+        m_file.resize(m_sectors * m_sectorSize);
+        QByteArray emptyData(m_sectors * m_sectorSize, 0xFF);
+        m_file.write(emptyData);
+        m_file.close();
     }
 }
-Пояснения:
-TableView:
 
-selectionBehavior и selectionMode настроены на выбор строки и одновременное выделение одной строки соответственно.
-onCurrentRowChanged — это сигнал, который вызывается при изменении текущей строки. Внутри него можно получить текущий индекс строки и использовать метод data для доступа к данным модели.
-Получение данных из модели:
-
-myModel.data(index, MyModel.NameRole): Получает данные из модели, используя индекс и роль. Вы должны убедиться, что роль зарегистрирована в модели (например, NameRole и DetailRole).
-MessageDialog:
-
-Этот элемент отображает подробную информацию, извлеченную из модели. Открывается при нажатии кнопки "Show Details".
-Регистрация ролей в модели
-Убедитесь, что роли зарегистрированы в модели и доступны для использования в QML. Пример регистрации ролей:
-
-cpp
-Копировать код
-QHash<int, QByteArray> MyModel::roleNames() const {
-    QHash<int, QByteArray> roles;
-    roles[NameRole] = "name";
-    roles[DetailRole] = "detail";
-    return roles;
+bool RomEmulator::addressInRange(quint32 address, quint32 size) const {
+    return address + size <= m_sectors * m_sectorSize;
 }
-В QML, MyModel.NameRole и MyModel.DetailRole соответствуют NameRole и DetailRole из модели, используемой для доступа к данным.
+
+bool RomEmulator::writeArray(quint32 address, const QByteArray& array, quint32 size) {
+    if (!addressInRange(address, size)) {
+        qCritical() << "Address out of range";
+        return false;
+    }
+
+    if (!m_file.open(QIODevice::ReadWrite)) {
+        qCritical() << "Cannot open file for writing:" << m_filePath;
+        return false;
+    }
+
+    m_file.seek(address);
+    QByteArray currentData = m_file.read(size);
+
+    for (quint32 i = 0; i < size; ++i) {
+        if (static_cast<quint8>(currentData[i]) != 0xFF) {
+            qCritical() << "Cannot write to non-empty cell at address" << address + i;
+            m_file.close();
+            return false;
+        }
+    }
+
+    m_file.seek(address);
+    m_file.write(array.left(size));
+    m_file.close();
+    return true;
+}
+
+QByteArray RomEmulator::readArray(quint32 address, quint32 size) {
+    if (!addressInRange(address, size)) {
+        qCritical() << "Address out of range";
+        return QByteArray();
+    }
+
+    if (!m_file.open(QIODevice::ReadOnly)) {
+        qCritical() << "Cannot open file for reading:" << m_filePath;
+        return QByteArray();
+    }
+
+    m_file.seek(address);
+    QByteArray data = m_file.read(size);
+    m_file.close();
+    return data;
+}
+
+void RomEmulator::clearSector(quint8 sectorNumber) {
+    if (sectorNumber >= m_sectors) {
+        qCritical() << "Sector number out of range";
+        return;
+    }
+
+    if (!m_file.open(QIODevice::ReadWrite)) {
+        qCritical() << "Cannot open file for clearing sector:" << m_filePath;
+        return;
+    }
+
+    m_file.seek(sectorNumber * m_sectorSize);
+    QByteArray emptySector(m_sectorSize, 0xFF);
+    m_file.write(emptySector);
+    m_file.close();
+}
