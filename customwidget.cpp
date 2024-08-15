@@ -37,6 +37,30 @@ CustomButtonPanel::CustomButtonPanel(QWidget *parent) : QWidget(parent) {
     button1 = new QPushButton("Button 1", this);
     button2 = new QPushButton("Button 2", this);
 
+    button1->setStyleSheet(
+                                "QPushButton {"
+                           "    background-color: #2f2f2f;" /* Темно-серый цвет по умолчанию */
+                           "    border-left: 2px solid #000000;" /* Левая граница черная */
+                           "    border-bottom: 2px solid #000000;" /* Нижняя граница черная */
+                           "    border-right: 2px solid #ffffff;" /* Правая граница белая */
+                           "    border-top: 2px solid #ffffff;" /* Верхняя граница белая */
+                           "    color: #ffffff;" /* Цвет текста */
+                           "}"
+                           "QPushButton:hover {"
+                           "    background-color: #4f4f4f;" /* Более светлый цвет при наведении */
+                           "    border-left: 2px solid #888888;" /* Подсвеченная левая граница */
+                           "    border-bottom: 2px solid #888888;" /* Подсвеченная нижняя граница */
+                           "    border-right: 2px solid #cccccc;" /* Подсвеченная правая граница */
+                           "    border-top: 2px solid #cccccc;" /* Подсвеченная верхняя граница */
+                           "}"
+                           "QPushButton:pressed {"
+                           "    background-color: #1f1f1f;" /* Более темный цвет при нажатии */
+                           "    border-left: 2px solid #444444;" /* Измененная левая граница */
+                           "    border-bottom: 2px solid #444444;" /* Измененная нижняя граница */
+                           "    border-right: 2px solid #777777;" /* Измененная правая граница */
+                           "    border-top: 2px solid #777777;" /* Измененная верхняя граница */
+                           "}"
+                           );
     buttonLayout = new QHBoxLayout(this);
     buttonLayout->addStretch();
     buttonLayout->addWidget(button1);
@@ -78,6 +102,30 @@ CustomWidget::CustomWidget(QWidget *parent) : QWidget(parent) {
     treeView = new QTreeView(this);
     treeView->setModel(fileSystemModel);
     treeView->setRootIndex(fileSystemModel->index(QDir::rootPath()));
+    treeView->setStyleSheet(
+        "QTreeView {"
+        "    background-color: #f0f0f0;" /* Цвет фона дерева */
+        "    alternate-background-color: #e0e0e0;" /* Альтернативный цвет фона для четных строк */
+        "}"
+        "QHeaderView::section {"
+        "    background-color: #4f81bd;" /* Цвет фона заголовков столбцов */
+        "    color: white;" /* Цвет текста заголовков */
+        "    padding: 4px;" /* Отступы для текста */
+        "    font-weight: bold;" /* Жирный текст */
+        "    border: 1px solid #6d9eeb;" /* Цвет границы заголовков */
+        "}"
+        "QScrollBar:vertical {"
+        "    border: 2px solid #6d9eeb;"
+        "    background: #f0f0f0;"
+        "    width: 10px;"
+        "    border-radius: 5px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "    background: #4f81bd;"
+        "    border-radius: 5px;"
+        "}"
+        );
+    treeView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     mainLayout->addWidget(treeView);
 
